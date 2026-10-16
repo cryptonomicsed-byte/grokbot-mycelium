@@ -1,0 +1,48 @@
+[Unit]
+Description=grokbot-pumpfun paper tape -> Mycelium bridge (PAPER: cannot execute)
+Documentation=https://github.com/cryptonomicsed-byte/grokbot-mycelium
+After=network-online.target
+Wants=network-online.target
+
+# WHY THIS UNIT IS CATEGORY "paper" AND NOT "execution"
+# -----------------------------------------------------
+# grokbot's live executor raises NotImplementedError (src/executor.py:246,251),
+# so no key this process holds can reach a venue. It is registered in
+# ares-control/service/daemons.py as Category.PAPER, which is togglable without
+# approve_execution=true.
+#
+# THAT CLASSIFICATION IS A PROPERTY OF GROKBOT, NOT OF THIS UNIT. If grokbot's
+# executor is ever implemented, this unit becomes an EXECUTION unit in the same
+# commit -- otherwise the fleet's approval gate is bypassed by a change made in
+# a different repository, which no reviewer of daemons.py would see.
+
+[Service]
+Type=simple
+User=ares
+WorkingDirectory=/opt/ares
+
+# Required. The substrate path must point at a checkout of mycelium-tools'
+# substrate package; MYCELIUM_DB may be set to keep this bridge's traces in a
+# separate database rather than the fleet's live one.
+Environment=MYCELIUM_SUBSTRATE_PATH=/opt/ares/mycelium-tools/packages/mycelium-substrate
+Environment=GROKBOT_TAPE=/opt/ares/grokbot-pumpfun/logs/trades.jsonl
+Environment=GROKBOT_STATE_LOG=/var/lib/ares/grokbot-mycelium/pass.jsonl
+Environment=GROKBOT_CURSOR=/var/lib/ares/grokbot-mycelium/cursor.json
+
+ExecStart=/usr/bin/python3 /opt/ares/grokbot-mycelium/tools/bridge_daemon.py --interval 300
+
+Restart=on-failure
+RestartSec=30
+
+# The bridge reads a JSONL tape and writes traces. It needs no network, no
+# wallet, and no trading key -- so it is given none of them.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/ares/grokbot-mycelium
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
